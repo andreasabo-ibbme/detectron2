@@ -5,6 +5,9 @@ import multiprocessing as mp
 from collections import deque
 import cv2
 import torch
+import numpy as np
+import tqdm
+
 
 from detectron2.data import MetadataCatalog
 from detectron2.engine.defaults import DefaultPredictor
@@ -73,6 +76,47 @@ class VisualizationDemo(object):
             else:
                 break
 
+    def format_predictions_for_csv(self, keypoints_np):
+        data = [] # data from all skeletons for this time step
+        for skel in keypoints_np:
+            skel_str = []
+            for joint in skel:
+                # https://stackoverflow.com/questions/2721521/fastest-way-to-generate-delimited-string-from-1d-numpy-array    
+                x_arrstr = np.char.mod('%f', joint)
+                x_str = ",".join(x_arrstr)
+                skel_str.append(x_str)
+
+            skel_str_final = ','.join(skel_str)
+            data.append(skel_str_final)
+
+        data = ';'.join(data)
+        return data
+
+
+    def predictions_from_video(self, video):
+        frame_gen = self._frame_from_video(video)
+        all_predictions = []
+        frame_count = 1
+        ref_output_image = []
+        ref_output_image_raw = []
+        for frame in frame_gen:
+            predictions, vis_output = self.run_on_image(frame)
+            if (frame_count == 50): 
+                ref_output_image = vis_output
+                image_frame = frame[:, :, ::-1]
+                ref_output_image_raw = image_frame
+            instances = predictions['instances']
+            keypoints = instances.pred_keypoints if instances.has("pred_keypoints") else None
+            if (keypoints is None):
+                print("MISSING PREDS")
+            keypoints_np = keypoints.cpu().numpy() #Move the data from GPU to CPU and convert to numpy
+            timestep_data = self.format_predictions_for_csv(keypoints_np)
+            timestep_data = str(frame_count) + "_" + timestep_data
+            all_predictions.append(timestep_data)
+            frame_count = frame_count + 1
+
+        return all_predictions,ref_output_image, ref_output_image_raw
+
     def run_on_video(self, video):
         """
         Visualizes predictions on frames of the input video.
@@ -85,8 +129,8 @@ class VisualizationDemo(object):
             ndarray: BGR visualizations of each video frame.
         """
         video_visualizer = VideoVisualizer(self.metadata, self.instance_mode)
-
         def process_predictions(frame, predictions):
+
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             if "panoptic_seg" in predictions:
                 panoptic_seg, segments_info = predictions["panoptic_seg"]
@@ -106,6 +150,8 @@ class VisualizationDemo(object):
             return vis_frame
 
         frame_gen = self._frame_from_video(video)
+        # print('_frame_from_video')
+        # print(frame_gen)
         if self.parallel:
             buffer_size = self.predictor.default_buffer_size
 
