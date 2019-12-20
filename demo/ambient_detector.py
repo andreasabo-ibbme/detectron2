@@ -21,11 +21,16 @@ from detectron2.utils.logger import setup_logger
 
 from predictor import VisualizationDemo
 
-# constants
+# These can be overridden by command line arguments
 WINDOW_NAME = "COCO detections"
-OUTPUT_VIDEO = True
+OUTPUT_VIDEO = False
 OUTPUT_BASE = "output"
-Belmont_vids = True # If this is true, use the input video as the output foldername
+Belmont_vids = False # If this is true, use the input video as the output foldername
+FORCE_VERTICAL = False 
+
+
+
+DEFAULT_INPUT_FILE = "/home/researchuser/Desktop/data_to_process/process_list_avi.csv"
 
 
 def setup_cfg(args):
@@ -53,11 +58,12 @@ def get_parser():
     )
     parser.add_argument("--input",
                          metavar="FILE", 
+                         default = DEFAULT_INPUT_FILE,
                          help="A CSV with a list of input videos and corresponding output filenames")
     parser.add_argument(
         "--opts",
         help="Modify model config options using the command-line",
-        default=[],
+        default=['MODEL.WEIGHTS', 'models/model_final_997cc7.pkl'],
         nargs=argparse.REMAINDER,
     )
     parser.add_argument(
@@ -66,6 +72,10 @@ def get_parser():
         default=0.5,
         help="Minimum score for instance predictions to be shown",
     )
+    parser.add_argument('--output_video', dest='output_video', default=OUTPUT_VIDEO, action='store_true')
+    parser.add_argument('--belmont', dest='is_belmont', default=Belmont_vids, action='store_true')
+    parser.add_argument('--force_vert', dest='force_vertical', default=FORCE_VERTICAL, action='store_true')
+
     return parser
 
 
@@ -75,11 +85,18 @@ if __name__ == "__main__":
     args = get_parser().parse_args()
     logger = setup_logger()
     logger.info("Arguments: " + str(args))
+    print(args)
 
     cfg = setup_cfg(args)
 
-    demo = VisualizationDemo(cfg)
+    demo = VisualizationDemo(cfg, force_vert=FORCE_VERTICAL)
 
+    # Parse custom arguments
+    OUTPUT_VIDEO = args.output_video
+    Belmont_vids = args.is_belmont
+    FORCE_VERTICAL = args.force_vertical
+
+    print(f'OUTPUT_VIDEO: %s' % OUTPUT_VIDEO)
 
     if args.input:
         input_files, output_files = [], []
@@ -135,7 +152,12 @@ if __name__ == "__main__":
                     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
                     fourcc = cv2.VideoWriter_fourcc(*"MPEG")
 
-                    
+                    if FORCE_VERTICAL: # this is important so we can save it correctly when making the output video
+                        if width > height:
+                            temp = width
+                            width = height
+                            height = temp
+
                     output_fname = out_vid
                     output_file = cv2.VideoWriter(
                         filename=output_fname,
@@ -155,6 +177,7 @@ if __name__ == "__main__":
                         os.makedirs(directory)
 
                 if OUTPUT_VIDEO:
+                    print("saving video to: " + output_fname + '\n')
                     # for vis_frame in tqdm.tqdm(demo.run_on_video(video), total=num_frames):
                     for vis_frame in tqdm.tqdm(demo.run_on_video(video), total=num_frames):
                         output_file.write(vis_frame)
@@ -165,8 +188,9 @@ if __name__ == "__main__":
                 predictions, predimg, predimg_raw = demo.predictions_from_video(video)
                 
                 # If we don't have any predicitons, check the file format
-                if len(predictions) == 0:
-                    reformatVideo(input_file)
+                # if len(predictions) == 0:
+                #     continue;
+                    # reformatVideo(input_file)
 
 
 
@@ -195,7 +219,7 @@ if __name__ == "__main__":
                         f.write("%s, 0, Success\n" % item)
 
             except Exception as e:
-
+                print("CAUGHT EXCEPTION: " + str(e))
                 # Save into the log file
                 with open(log_file, 'a') as f:
                     f.write("%s, -1, %s\n" % (input_file, e))

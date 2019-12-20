@@ -16,7 +16,7 @@ from detectron2.utils.visualizer import ColorMode, Visualizer
 
 
 class VisualizationDemo(object):
-    def __init__(self, cfg, instance_mode=ColorMode.IMAGE, parallel=False):
+    def __init__(self, cfg, force_vert = False, instance_mode=ColorMode.IMAGE, parallel=False):
         """
         Args:
             cfg (CfgNode):
@@ -31,11 +31,30 @@ class VisualizationDemo(object):
         self.instance_mode = instance_mode
 
         self.parallel = parallel
+        self.force_vert = force_vert
         if parallel:
             num_gpu = torch.cuda.device_count()
             self.predictor = AsyncPredictor(cfg, num_gpus=num_gpu)
         else:
             self.predictor = DefaultPredictor(cfg)
+
+
+    def rotate_frame(self, frame):
+        height, width, depth = frame.shape
+
+
+        if width > height:
+            frame = np.rot90(frame, 3)
+
+        return frame
+
+        # print(f'rotate frame %s, {frame.shape[1]}' %(frame.shape[0]))
+        # width = int(stream.get(cv2.CAP_PROP_FRAME_WIDTH))
+        # height = int(stream.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        # self.frameSize=(width,height)
+        # if self.FORCE_VERTICAL and width > height: 
+        #     self.frameSize=(height,width) # This allows us to save the output video correctly
+
 
     def run_on_image(self, image):
         """
@@ -100,7 +119,12 @@ class VisualizationDemo(object):
         ref_output_image = []
         ref_output_image_raw = []
         for frame in frame_gen:
+            # Rotate frame if necessary
+            if (self.force_vert):
+                frame = self.rotate_frame(frame)
+            # print(frame.shape)
             predictions, vis_output = self.run_on_image(frame)
+            # print(predictions)
             if (frame_count == 50): 
                 ref_output_image = vis_output
                 image_frame = frame[:, :, ::-1]
@@ -132,6 +156,13 @@ class VisualizationDemo(object):
         def process_predictions(frame, predictions):
 
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            # Rotate frame if needed
+            # print(frame.shape)
+
+            if (self.force_vert):
+                frame = self.rotate_frame(frame)
+
+            # print(frame.shape)
             if "panoptic_seg" in predictions:
                 panoptic_seg, segments_info = predictions["panoptic_seg"]
                 vis_frame = video_visualizer.draw_panoptic_seg_predictions(
