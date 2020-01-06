@@ -134,11 +134,12 @@ class VisualizationDemo(object):
             if (keypoints is None):
                 print("MISSING PREDS")
             keypoints_np = keypoints.cpu().numpy() #Move the data from GPU to CPU and convert to numpy
+            # print(keypoints_np.shape)
             timestep_data = self.format_predictions_for_csv(keypoints_np)
             timestep_data = str(frame_count) + "_" + timestep_data
             all_predictions.append(timestep_data)
             frame_count = frame_count + 1
-
+        print(len(all_predictions))
         return all_predictions,ref_output_image, ref_output_image_raw
 
     def run_on_video(self, video):

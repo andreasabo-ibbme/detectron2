@@ -14,6 +14,7 @@ import scipy.misc
 import matplotlib
 import ffmpeg
 import shlex, subprocess
+import shutil
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
@@ -29,7 +30,7 @@ Belmont_vids = False # If this is true, use the input video as the output folder
 FORCE_VERTICAL = False 
 
 
-
+DEFAULT_OUTPUT_DIRECTORY = "/home/researchuser/Desktop/detectron_paste"
 DEFAULT_INPUT_FILE = "/home/researchuser/Desktop/data_to_process/process_list_avi.csv"
 
 
@@ -77,6 +78,19 @@ def get_parser():
     parser.add_argument('--force_vert', dest='force_vertical', default=FORCE_VERTICAL, action='store_true')
 
     return parser
+
+# https://stackoverflow.com/questions/1868714/how-do-i-copy-an-entire-directory-of-files-into-an-existing-directory-using-pyth
+def copytree(src, dst, symlinks=False, ignore=None):
+
+    if not os.path.exists(dst):
+        os.makedirs(dst)
+    for item in os.listdir(src):
+        s = os.path.join(src, item)
+        d = os.path.join(dst, item)
+        if os.path.isdir(s):
+            shutil.copytree(s, d, symlinks, ignore)
+        else:
+            shutil.copy2(s, d)
 
 
 if __name__ == "__main__":
@@ -135,11 +149,16 @@ if __name__ == "__main__":
                 head, tail1 = os.path.split(base) # filename
                 head, tail2 = os.path.split(head) # walk folder
                 head, tail3 = os.path.split(head) # participant folder
-                outpath_base = os.path.join(OUTPUT_BASE, tail3, tail2)
+
+                vid_folder = os.path.join(tail3, tail2)
+
 
                 if Belmont_vids:
-                    outpath_base = os.path.join(OUTPUT_BASE, tail2, tail1)
-                    print('output base: ' + outpath_base)
+                    vid_folder = os.path.join(tail2, tail1)
+
+
+                outpath_base = os.path.join(OUTPUT_BASE, vid_folder)
+                print('output base: ' + outpath_base)
                 out_txt = os.path.join(outpath_base, 'output_detectron.txt')
                 out_img = os.path.join(outpath_base, 'predimg50_detectron.jpg')
                 out_img_raw = os.path.join(outpath_base, 'predimg50.jpg')
@@ -149,6 +168,8 @@ if __name__ == "__main__":
 
                 # print(output_fname)
                 if OUTPUT_VIDEO:
+                    video_for_vid_process = cv2.VideoCapture(input_file)
+
                     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
                     fourcc = cv2.VideoWriter_fourcc(*"MPEG")
 
@@ -176,17 +197,19 @@ if __name__ == "__main__":
                     if not os.path.exists(directory):
                         os.makedirs(directory)
 
-                if OUTPUT_VIDEO:
                     print("saving video to: " + output_fname + '\n')
                     # for vis_frame in tqdm.tqdm(demo.run_on_video(video), total=num_frames):
-                    for vis_frame in tqdm.tqdm(demo.run_on_video(video), total=num_frames):
+                    for vis_frame in tqdm.tqdm(demo.run_on_video(video_for_vid_process), total=num_frames):
                         output_file.write(vis_frame)
 
                 
+                # end if OUTPUT_VIDEO
+
                 print("starting predictions on: %s\n" % input_file)
                 #a = demo.run_on_video(video)
                 predictions, predimg, predimg_raw = demo.predictions_from_video(video)
-                
+                print(len(predictions))
+                # print(predictions)
                 # If we don't have any predicitons, check the file format
                 # if len(predictions) == 0:
                 #     continue;
@@ -210,13 +233,26 @@ if __name__ == "__main__":
 
 
                 processed_walks.append(input_file)
+                print("processed_walks: ") 
                 print(processed_walks)
-                print(input_file)
+                print("input_file:" + input_file)
+                print("out_txt file:" + out_txt)
+
+
+                # Copy over the contents from the temp file to the final destination folder
+                destination_folder = os.path.join(DEFAULT_OUTPUT_DIRECTORY, vid_folder)
+                print("copying from {0} to {1}" , (outpath_base, destination_folder))
+                copytree(outpath_base, destination_folder, symlinks=False, ignore=None)
+
+
+
 
                 # Save into the log file
                 with open(log_file, 'w') as f:
                     for item in processed_walks:
                         f.write("%s, 0, Success\n" % item)
+
+
 
             except Exception as e:
                 print("CAUGHT EXCEPTION: " + str(e))
