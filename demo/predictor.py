@@ -125,6 +125,8 @@ class VisualizationDemo(object):
             # print(frame.shape)
             predictions, vis_output = self.run_on_image(frame)
             # print(predictions)
+            # cv2.imwrite('predimg_detectron' + str(frame_count) + '.jpg',vis_output)
+
             if (frame_count == 50): 
                 ref_output_image = vis_output
                 image_frame = frame[:, :, ::-1]
@@ -157,11 +159,8 @@ class VisualizationDemo(object):
         def process_predictions(frame, predictions):
 
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            # Rotate frame if needed
-            # print(frame.shape)
 
-            if (self.force_vert):
-                frame = self.rotate_frame(frame)
+
 
             # print(frame.shape)
             if "panoptic_seg" in predictions:
@@ -170,6 +169,7 @@ class VisualizationDemo(object):
                     frame, panoptic_seg.to(self.cpu_device), segments_info
                 )
             elif "instances" in predictions:
+
                 predictions = predictions["instances"].to(self.cpu_device)
                 vis_frame = video_visualizer.draw_instance_predictions(frame, predictions)
             elif "sem_seg" in predictions:
@@ -179,6 +179,7 @@ class VisualizationDemo(object):
 
             # Converts Matplotlib RGB format to OpenCV BGR format
             vis_frame = cv2.cvtColor(vis_frame.get_image(), cv2.COLOR_RGB2BGR)
+            # vis_frame = cv2.cvtColor(frame.get_image(), cv2.COLOR_RGB2BGR)
             return vis_frame
 
         frame_gen = self._frame_from_video(video)
@@ -204,6 +205,8 @@ class VisualizationDemo(object):
                 yield process_predictions(frame, predictions)
         else:
             for frame in frame_gen:
+                if (self.force_vert):
+                    frame = self.rotate_frame(frame)
                 yield process_predictions(frame, self.predictor(frame))
 
 
@@ -286,6 +289,9 @@ class AsyncPredictor:
         return self.put_idx - self.get_idx
 
     def __call__(self, image):
+
+
+
         self.put(image)
         return self.get()
 

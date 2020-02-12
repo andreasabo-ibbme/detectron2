@@ -98,6 +98,8 @@ def copytree(src, dst, symlinks=False, ignore=None):
         else:
             shutil.copy2(s, d)
 
+    # Delete the contents in the temp folder so we don't run out of disk space
+    # shutil.rmtree(src)
 
 def saveUpdatedListOfVideosToProcess(list_of_vids_to_process, save_file_name):
     if len(list_of_vids_to_process) is 0 and os.path.exists(list_of_vids_to_process):
@@ -121,6 +123,22 @@ if __name__ == "__main__":
         args.belmont = config.get('general', 'belmont_vids')
         args.force_vert = config.get('general', 'force_vertical')
         args.output_video = config.get('detectron', 'output_video')
+        error_log_base = config.get('general', 'log_file_path')
+
+        if args.belmont == "True":
+            args.belmont = True
+        else:
+            args.belmont = False
+
+        if args.force_vert == "True":
+            args.force_vert = True
+        else:
+            args.force_vert = False
+
+        if args.output_video == "True":
+            args.output_video = True
+        else:
+            args.output_video = False
 
     logger = setup_logger()
     logger.info("Arguments: " + str(args))
@@ -128,20 +146,25 @@ if __name__ == "__main__":
 
     cfg = setup_cfg(args)
 
-    demo = VisualizationDemo(cfg, force_vert=FORCE_VERTICAL)
 
     # Parse custom arguments
     OUTPUT_VIDEO = args.output_video
+    # OUTPUT_VIDEO = False
     Belmont_vids = args.belmont
-    FORCE_VERTICAL = args.force_vertical
+    FORCE_VERTICAL = args.force_vert
+
+
 
     print(f'OUTPUT_VIDEO: %s' % OUTPUT_VIDEO)
+    demo = VisualizationDemo(cfg, force_vert=FORCE_VERTICAL)
 
+    time_now = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    log_file = os.path.join(error_log_base, time_now + '_detectron.csv')
+    print("logging errors: %s" % log_file)
 
 
     if args.input:
         input_files, output_files = [], []
-        logfile = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         processed_walks = []
 
         # Load all of the files we need to process into memory to avoid keeping the file open
@@ -199,7 +222,6 @@ if __name__ == "__main__":
                 out_txt = os.path.join(outpath_base, 'output_detectron.txt')
                 out_img = os.path.join(outpath_base, 'predimg50_detectron.jpg')
                 out_img_raw = os.path.join(outpath_base, 'predimg50.jpg')
-                log_file = os.path.join(OUTPUT_BASE, logfile + '.txt')
                 out_vid = os.path.join(outpath_base, 'detectron_video.mp4')
 
 
@@ -210,13 +232,15 @@ if __name__ == "__main__":
 
                     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
                     fourcc = cv2.VideoWriter_fourcc(*"MPEG")
+                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
                     if FORCE_VERTICAL: # this is important so we can save it correctly when making the output video
                         if width > height:
                             temp = width
                             width = height
                             height = temp
-
+                    print(f"width: {width}")
+                    print(f"height: {height}")
                     output_fname = out_vid
                     output_file = cv2.VideoWriter(
                         filename=output_fname,
@@ -235,12 +259,16 @@ if __name__ == "__main__":
                     if not os.path.exists(directory):
                         os.makedirs(directory)
 
-                    print("saving video to: " + output_fname + '\n')
+                    print("saving video to: " + out_vid + '\n')
                     # for vis_frame in tqdm.tqdm(demo.run_on_video(video), total=num_frames):
+                    # me = 0
                     for vis_frame in tqdm.tqdm(demo.run_on_video(video_for_vid_process), total=num_frames):
+                        # cv2.imwrite(outpath_base+'/predimg_detectron' + str(me) + '.jpg',vis_frame)
+                        # me += 1
                         output_file.write(vis_frame)
 
-                
+                    output_file.release()
+                    
                 # end if OUTPUT_VIDEO
 
                 print("starting predictions on: %s\n" % input_file)
@@ -281,11 +309,13 @@ if __name__ == "__main__":
 
 
                 destination_folder = os.path.join(DEFAULT_OUTPUT_DIRECTORY, vid_folder)
-                print("copying from {0} to {1}" , (outpath_base, destination_folder))
+                print(f"copying from {outpath_base} to {destination_folder}")
                 copytree(outpath_base, destination_folder, symlinks=False, ignore=None)
 
 
-
+                # # Remove the original file
+                # if os.path.exists(out_vid):
+                #     os.remove(out_vid)
 
                 # Save into the log file
                 with open(log_file, 'w') as f:
