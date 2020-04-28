@@ -15,7 +15,6 @@ import matplotlib
 import ffmpeg
 import shlex, subprocess
 import shutil
-
 import configparser
 
 from detectron2.config import get_cfg
@@ -124,6 +123,8 @@ if __name__ == "__main__":
         args.force_vert = config.get('general', 'force_vertical')
         args.output_video = config.get('detectron', 'output_video')
         error_log_base = config.get('general', 'log_file_path')
+        args.skip_if_output_csv_exists = config.get('detectron', 'skip_if_output_csv_exists')
+        args.process_from_last = config.get('detectron', 'process_from_last')
 
         if args.belmont == "True":
             args.belmont = True
@@ -139,7 +140,16 @@ if __name__ == "__main__":
             args.output_video = True
         else:
             args.output_video = False
+        if args.skip_if_output_csv_exists == "True":
+            args.skip_if_output_csv_exists = True
+        else:
+            args.skip_if_output_csv_exists = False
+        if args.process_from_last == "True":
+            args.process_from_last = True
+        else:
+            args.process_from_last = False
 
+            
     logger = setup_logger()
     logger.info("Arguments: " + str(args))
     print(args)
@@ -180,6 +190,12 @@ if __name__ == "__main__":
         num_files = len(input_files)
         for i in range(num_files):
             input_file = input_files[i]
+            vid_in_seq = i
+            if args.process_from_last:
+                input_file = input_files[-i]
+                vid_in_seq = num_files - i
+                print(input_file)
+
             if (len(input_file) == 0):
                 print('empty file')
                 continue
@@ -210,7 +226,6 @@ if __name__ == "__main__":
 
                 if Belmont_vids:
                     vid_folder = os.path.join(tail2, tail1)
-                    # print("in belmont vids")
                     DEFAULT_OUTPUT_DIRECTORY = head2
 
                 # print("output save location++++++++++++++++++++++++++++++++")
@@ -218,12 +233,18 @@ if __name__ == "__main__":
                 # print(vid_folder)
 
                 outpath_base = os.path.join(OUTPUT_BASE, vid_folder)
-                print('output base: ' + outpath_base)
+                # print('output base: ' + outpath_base)
                 out_txt = os.path.join(outpath_base, 'output_detectron.txt')
                 out_img = os.path.join(outpath_base, 'predimg50_detectron.jpg')
                 out_img_raw = os.path.join(outpath_base, 'predimg50.jpg')
                 out_vid = os.path.join(outpath_base, 'detectron_video.mp4')
 
+                if args.skip_if_output_csv_exists:
+                    final_output_csv = os.path.join(DEFAULT_OUTPUT_DIRECTORY, vid_folder, "output_detectron.txt")
+
+                    if os.path.isfile(final_output_csv):
+                        print("skipping: ", final_output_csv)
+                        continue
 
 
                 # print(output_fname)
@@ -239,8 +260,8 @@ if __name__ == "__main__":
                             temp = width
                             width = height
                             height = temp
-                    print(f"width: {width}")
-                    print(f"height: {height}")
+                    # print(f"width: {width}")
+                    # print(f"height: {height}")
                     output_fname = out_vid
                     output_file = cv2.VideoWriter(
                         filename=output_fname,
@@ -255,7 +276,6 @@ if __name__ == "__main__":
                     )
 
                     directory = os.path.dirname(output_fname)
-                    print(directory)
                     if not os.path.exists(directory):
                         os.makedirs(directory)
 
@@ -271,10 +291,12 @@ if __name__ == "__main__":
                     
                 # end if OUTPUT_VIDEO
 
-                print("starting predictions on: %s\n" % input_file)
+                print(f"Video {vid_in_seq}/{num_files}, Starting predictions on: {input_file}")
                 #a = demo.run_on_video(video)
+                start = time.time()
                 predictions, predimg, predimg_raw = demo.predictions_from_video(video)
-                print(len(predictions))
+                end = time.time()
+                print(f"Processed {len(predictions)} frames with people in {end-start} seconds.")
                 # print(predictions)
                 # If we don't have any predicitons, check the file format
                 # if len(predictions) == 0:
@@ -299,10 +321,10 @@ if __name__ == "__main__":
 
 
                 processed_walks.append(input_file)
-                print("processed_walks: ") 
-                print(processed_walks)
-                print("input_file:" + input_file)
-                print("out_txt file:" + out_txt)
+                # print("processed_walks: ") 
+                # print(processed_walks)
+                # print("input_file:" + input_file)
+                # print("out_txt file:" + out_txt)
 
 
                 # Copy over the contents from the temp file to the final destination folder
@@ -330,7 +352,10 @@ if __name__ == "__main__":
                 with open(log_file, 'a') as f:
                     f.write("%s, -1, %s\n" % (input_file, e))
 
-            saveUpdatedListOfVideosToProcess(input_files[i+1:], args.input)
+            if args.process_from_last:
+                saveUpdatedListOfVideosToProcess(input_files[:num_files - i], args.input)
+            else:
+                saveUpdatedListOfVideosToProcess(input_files[i+1:], args.input)
 
 
             # video.release()
